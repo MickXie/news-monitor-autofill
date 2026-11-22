@@ -105,7 +105,7 @@ def architecture():
     dy = 92                                   # 本機區塊整體下移，上方留給雲端 LLM
     b = []
     b.append(box(150, 26 + dy, 940, 236, "none", 1.2, "6 4"))
-    b.append(text(160, 44 + dy, ["本機（Mac）處理：影片與截圖不離開本機"], 13.5))
+    b.append(text(160, 44 + dy, ["本機（Mac）處理：影片、截圖與文字都不離開本機"], 13.5))
     b.append(box(6, 70 + dy, 128, 120, BLUE))
     b.append(text(70, 94 + dy, ["輸入", "四台側錄 mp4", "範本 xlsx", "10/26 範例"], 14, "middle", True, 23))
     b.append(arrow(134, 115 + dy, 166, 115 + dy))
@@ -139,10 +139,14 @@ def architecture():
         b.append(text(cx, cy + 22, [name, desc], 12.5, "middle", lh=17))
     c4 = centers[3]
     b.append(box(c4 - 130, 8, 260, 60, "#fff", 1.4, rx=8))
-    b.append(text(c4, 32, ["LLM 服務（雲端）", "Claude 示範／DeepSeek 正式"], 14, "middle", True, 22))
+    b.append(text(c4, 32, ["LLM 服務", "預設本機 Ollama／可選雲端"], 14, "middle", True, 22))
     b.append(arrow(c4 - 22, y - 2, c4 - 22, 70))
     b.append(arrow(c4 + 22, 70, c4 + 22, y - 2))
-    b.append(text(c4 + 140, 30, ["只送標題文字（不送影片）；", "結果快取，同一輸入不重問"], 12.5, lh=18))
+    b.append(text(c4 + 140, 30, ["本機：資料不離開電腦、免費；", "雲端：只送標題文字；結果皆快取"], 12.5, lh=18))
+    # 網頁程式（使用者操作入口）
+    b.append(box(6, 8, 300, 60, BLUE, 1.4, rx=8))
+    b.append(text(156, 32, ["網頁程式（雙擊啟動）", "拖入影片、看進度、下載 Excel"], 14, "middle", True, 22))
+    b.append(arrow(70, 70, 70, 70 + dy - 2))
     c6 = centers[5]
     oy = 300 + dy
     b.append(arrow(c6, y + 88, c6, oy - 2))
@@ -172,7 +176,7 @@ def roadmap():
     for x in xs[1:3]:
         b.append(f"<polygon points='{x},52 {x + 11},64 {x},76 {x - 11},64' fill='#000'/>")
     phases = [
-        ("並行試行", "午間一小時每天自動跑", ["人工對照組（同小時人工另填）", "改用 DeepSeek、固定參數"],
+        ("並行試行", "午間一小時每天自動跑", ["人工對照組（同小時人工另填）", "選定本機模型、固定參數"],
          ["分鐘對齊 ≥ 95%", "廣告破口 100%", "五字標 ≥ 90%（連續 2 週）"]),
         ("擴大時段", "擴到晚間與全天新聞", ["各節目版面設定", "工讀生轉抽查員、抽查制度"],
          ["抽查 ≤ 10 分鐘／小時", "告警誤報 ≤ 1 次／週"]),

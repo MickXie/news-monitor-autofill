@@ -80,17 +80,37 @@ def review_rows(data, picks):
     return "".join(out)
 
 
+REPO = "https://github.com/MickXie/news-monitor-autofill"
+BENCH = ROOT / "work" / "bench_results"
+
+
+def ai_rows():
+    """AI 服務比較：本機模型的數字直接讀 work/bench_results/ 的實測結果。"""
+    import json as _json
+    rows = ["<tr><td>Claude（雲端）</td><td>會送出標題文字</td><td>訂閱費</td><td>約 5 分鐘</td><td>基準</td></tr>"]
+    for f, name in (("glm47flash_chunk20.json", "GLM-4.7-Flash（本機）"), ("qwen35_9b_chunk20.json", "Qwen 3.5 9B（本機）")):
+        p = BENCH / f
+        if p.exists():
+            d = _json.loads(p.read_text(encoding="utf-8"))
+            rows.append(f"<tr><td>{name}</td><td>不離開本機</td><td>0 元</td><td>約 {round(d.get('llm_secs', d['secs']) / 60)} 分鐘</td>"
+                        f"<td>{d['pos'] / d['tot']:.0%}</td></tr>")
+        else:
+            rows.append(f"<tr><td>{name}</td><td>不離開本機</td><td>0 元</td><td colspan='2'>測試中</td></tr>")
+    rows.append("<tr><td>不用 AI（保底規則）</td><td>不離開本機</td><td>0 元</td><td>不到 1 秒</td><td>58%</td></tr>")
+    return "".join(rows)
+
+
 CSS = """
-@page { size: A4; margin: 15mm 17mm 14mm 17mm; }
-body { font-family: Arial, "PingFang TC", "Heiti TC", sans-serif; font-size: 10pt; line-height: 1.45; color: #000; margin: 0; }
+@page { size: A4; margin: 13mm 15mm 12mm 15mm; }
+body { font-family: Arial, "PingFang TC", "Heiti TC", sans-serif; font-size: 9.6pt; line-height: 1.4; color: #000; margin: 0; }
 h1 { font-size: 21pt; font-weight: normal; margin: 0 0 3mm; }
-h2 { font-size: 15pt; font-weight: normal; margin: 5mm 0 2mm; break-after: avoid; }
-h3 { font-size: 11.5pt; font-weight: bold; margin: 4mm 0 1.5mm; break-after: avoid; }
+h2 { font-size: 14pt; font-weight: normal; margin: 4mm 0 1.5mm; break-after: avoid; }
+h3 { font-size: 11pt; font-weight: bold; margin: 3mm 0 1.2mm; break-after: avoid; }
 p { margin: 1mm 0 2mm; }
 ul, ol { margin: 1mm 0 2mm; padding-left: 6mm; } li { margin: .5mm 0; }
 table { border-collapse: collapse; width: 100%; margin: 1.5mm 0 3mm; break-inside: auto; }
 tr { break-inside: avoid; }
-th, td { border: 1px solid #000; padding: 1.1mm 1.8mm; vertical-align: top; text-align: left; }
+th, td { border: 1px solid #000; padding: .9mm 1.6mm; vertical-align: top; text-align: left; }
 th { background: #D9E8F7; font-weight: normal; }
 table.info th { background: #F3F3F3; }
 table.xl td, table.xl th { text-align: center; padding: .9mm 1mm; }
@@ -102,6 +122,10 @@ td.img { width: 52mm; } td.img img { width: 50mm; display: block; }
 .cap { font-size: 9pt; margin-top: 1mm; }
 .note { font-size: 9.3pt; }
 .newpage { break-before: page; }
+p.lead { break-after: avoid; page-break-after: avoid; }
+.shots { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm; break-inside: avoid; margin: 2mm 0 3mm; }
+.shots img { width: 100%; border: 1px solid #999; display: block; }
+a { color: #0645ad; }
 table.keep, table.xl { break-inside: avoid; }
 """
 
@@ -121,14 +145,14 @@ def build():
 <tr><th colspan="2">基本資訊</th></tr>
 <tr><td style="width:35%">提案者姓名</td><td>{E(PROPOSER)}</td></tr>
 <tr><td>企業名稱</td><td>三立新聞台</td></tr>
-<tr><td>交付內容</td><td>1. 自動填好的 Excel：12監看_自動填表_20261106.xlsx<br>2. 驗證頁：驗證頁.html（每一格附畫面截圖、播出時間、判斷理由）<br>3. 可重跑的程式：pipeline/run.py</td></tr>
+<tr><td>交付內容</td><td>1. 網頁程式（雙擊啟動，拖入影片即自動填表）<br>2. 自動填好的 Excel 與驗證頁（每一格附畫面截圖、播出時間、判斷理由）<br>3. 程式原始碼與使用說明：<a href="https://github.com/MickXie/news-monitor-autofill">https://github.com/MickXie/news-monitor-autofill</a></td></tr>
 </table>
 
 <h2>摘要 Summary</h2>
 <table>
 <tr><th style="width:17%">摘要項目</th><th style="width:17%">撰寫重點</th><th>內容</th></tr>
-<tr><td>問題痛點與價值</td><td>What I found</td><td>核心根因是「畫面上的文字不等於正在播的新聞」，而且缺少可靠的時間基準。同一則新聞會換好幾種標題寫法，廣告包框時下方標題 bar 還在輪播舊新聞，工讀生只能靠經驗和手錶判斷。若以每日監看 18 小時、時薪 196 元估算，人工成本約 129 萬元／年（假設值），導入後每年約可節省 107 萬元工時。</td></tr>
-<tr><td>核心解決方案</td><td>What I recommend</td><td>建立一套固定流程：用規則處理時間對齊與廣告判斷，只把「是不是同一則新聞、五字標怎麼寫」交給 AI，每一格都留下可查證的紀錄。由監看組主導日常運作，工讀生改為抽查。</td></tr>
+<tr><td>問題痛點與價值</td><td>What I found</td><td>核心根因是「畫面上的文字不等於正在播的新聞」，而且缺少可靠的時間基準。同一則新聞會換好幾種標題寫法，廣告包框時下方標題 bar 還在輪播舊新聞，工讀生只能靠經驗和手錶判斷。以每日監看 18 小時、時薪 196 元估算，人工約每小時 196 元、每年 129 萬元（假設值）；導入後每小時約 35 元，每年約可節省 106 萬元。</td></tr>
+<tr><td>核心解決方案</td><td>What I recommend</td><td>做成一個網頁程式：把 1 到 4 台的影片拖進去，自動認台、對時、判斷廣告、寫五字標並填好 Excel。時間與廣告用規則處理，只有「是不是同一則、五字標怎麼寫」交給 AI；AI 可在本機執行，影片與文字都不離開公司電腦，也沒有使用費。由監看組主導日常運作，工讀生改為每小時抽查約 10 分鐘。</td></tr>
 <tr><td>驗證結果評估</td><td>What the evaluation showed</td><td>已用 11/06 12:00–13:00 四台影片實際跑完，人工補填 0 格。新聞開始分鐘逐格核對 112 格，正確 109 格（97.3%，目標 95%）；廣告破口 13 段全部判對（目標 100%）；同一份輸入重跑兩次結果完全相同。處理 1 小時四台影片約 18 分鐘。六項指標皆已達標。</td></tr>
 </table>
 <p class="note">本報告依範本章節撰寫，命題的五個問題分別在：問題 1（流程與工具）3.1、3.3；問題 2（換題與五字標）3.2；問題 3（廣告包框）3.2；問題 4（Excel 與驗證）2.3、4.1；問題 5（進度、限制與擴大全天）4.2、5.1。</p>
@@ -161,7 +185,14 @@ def build():
 <tr><td>台別、分鐘、事件對齊</td><td>未量測，無法追溯</td><td>95% 以上，且每格可查證</td><td>由不可驗證變為可驗證</td></tr>
 <tr><td>廣告破口紀錄</td><td>依人判斷，包框容易漏判</td><td>破口開始分鐘 100% 正確</td><td>本次 13/13 已達成</td></tr>
 </table>
-<p>估算公式：年人工成本 ＝ 每日監看 18 小時 × 365 天 × 時薪 196 元 ≈ 128.8 萬元（未含勞健保；時數與時薪為假設，需依實際排班修正）。導入後保留每小時 10 分鐘抽查，約 21.5 萬元，每年可節省約 107 萬元。系統成本見 4.2，每日約數十元。</p>
+<table>
+<tr><th>每處理一小時（四台）的成本</th><th style="width:18%">實習生監看</th><th style="width:18%">本系統</th><th>計算方式</th></tr>
+<tr><td>人工</td><td>196 元</td><td>約 33 元</td><td>全程 1 人；導入後只抽查 10 分鐘（時薪 196 元，假設值）</td></tr>
+<tr><td>AI 使用費</td><td>—</td><td>0 元</td><td>本機 AI，不用付費；選用雲端 AI 才有費用</td></tr>
+<tr><td>電費</td><td>—</td><td>約 0.1 元</td><td>電腦約運轉 22 分鐘（實測）× 約 50 W × 每度 5 元（假設）</td></tr>
+<tr><td>硬體折舊</td><td>—</td><td>0–2 元</td><td>用現有 Mac 為 0；另購約 4 萬元的 Mac、用 3 年、每天 18 小時計約 2 元</td></tr>
+<tr><td><b>合計</b></td><td><b>196 元</b></td><td><b>約 35 元</b></td><td>降低約 82%；每天 18 小時、全年約省 106 萬元；另購硬體約兩週回本</td></tr>
+</table>
 <p>若維持現狀，未來一年的主要風險：（1）包框誤判造成廣告破口分析失準，影響排播與業務判斷，影響程度高；（2）多台同時換題時事件與時間錯位，收視率歸因錯誤，影響程度中高；（3）人員流動使五字標寫法不一致，歷史資料難以比對，影響程度中。</p>
 
 <h2>2. 未來場景與評估方式 To-Be Scenarios &amp; Evaluation Method</h2>
@@ -204,6 +235,16 @@ def build():
 <tr><td>輸出</td><td>只寫入 F、J、N、R 四欄、其他格式不變的 Excel；以及驗證頁（每格附截圖、播出時間、信心與判斷理由）</td></tr>
 <tr><td>不涵蓋事項</td><td>收視率欄位、三立欄位、秒級紀錄、新增欄位，以及命題範圍以外的時段</td></tr>
 </table>
+<p><b>使用條件</b>（已在 MacBook Pro M5、32 GB、macOS 27.2 實測）：</p>
+<table>
+<tr><th style="width:16%">項目</th><th>條件</th></tr>
+<tr><td>電腦</td><td>Mac（Apple 晶片 M1 以上）。文字辨識使用 macOS 內建 Apple Vision，Windows 與 Intel Mac 無法執行</td></tr>
+<tr><td>記憶體與硬碟</td><td>記憶體 16 GB 以上，使用本機 AI 建議 32 GB；硬碟每次任務暫存約影片大小 1.5 倍（四台一小時約 6 GB，完成後自動刪除副本），本機 AI 模型另需 7–19 GB</td></tr>
+<tr><td>影片</td><td>一支影片為一台，1 到 4 台皆可；mp4、mov、ts、mkv，任何解析度。畫面需有台標與左下角時鐘</td></tr>
+<tr><td>支援頻道</td><td>TVBS-N、東森、民視、華視 2026 年 11 月的畫面版面；電視台改版時需更新讀取區域設定</td></tr>
+<tr><td>範本</td><td>第一個工作表 A 欄為時間（1200、1201…），表頭列有台名；可在網頁上傳不同範本</td></tr>
+<tr><td>網路與人員</td><td>只有安裝時需要網路，使用本機 AI 處理時完全離線；每處理一小時建議抽查約 10 分鐘</td></tr>
+</table>
 
 <h3>3.2 解法思路 Solution logic</h3>
 <p><b>（1）五字標如何對準分鐘：以時鐘推算時間</b></p>
@@ -216,7 +257,7 @@ def build():
 
 <p><b>（2）換題與無關字幕怎麼判斷</b></p>
 <ol>
-<li>只讀主標題區：每台設定固定的讀取範圍，跑馬燈、角落天氣、別則推播與小廣告都不在範圍內（圖 6、圖 7）。</li>
+<li>只讀主標題區：每台設定固定的讀取範圍，跑馬燈、角落天氣、別則推播與小廣告都不在範圍內（圖 3）。</li>
 <li>取字最大的一行：同一區若有受訪者職稱的小字名條，標記為「可能是字幕」；「○○報導」等記者署名直接濾除。</li>
 <li>合成文字段：連續幾秒內容相近（容許 OCR 錯字）的畫面合成一段，記下開始時間與秒數。</li>
 <li>由 LLM 判斷是否同一則：每 20 分鐘一批送出，前後各附 1–2 分鐘上下文。規則是畫面形式或標題寫法改變都不算換題，只有事件改變才算。</li>
@@ -234,9 +275,10 @@ def build():
 <tr><td>民視</td><td>包框：左邊播廣告、右邊「現在最焦點」，下方 bar 輪播已播過的標題</td><td>右上「現在最焦點」字樣</td></tr>
 <tr><td>華視</td><td>全螢幕廣告，加上「正在播出 Now On CTS」台呼</td><td>時鐘消失</td></tr>
 </table>
-<div class="two fig">
-<div><img src="img/wrap_ftv.jpg"><div class="cap">圖 3　民視包框（12:36）。時鐘仍在，下方 bar 顯示的是 12:12 已播過的別則標題；系統以右上「現在最焦點」判定為廣告。</div></div>
-<div><img src="img/ebc_promo.jpg"><div class="cap">圖 4　東森廣告中的預告卡。有新聞標題但沒有時鐘，判定為廣告。</div></div>
+<div class="three fig">
+<div><img src="img/roi_tvbs.jpg"><div class="cap">圖 3　只讀固定區域：主標題、時鐘、地點標，跑馬燈不讀（TVBS 12:09）</div></div>
+<div><img src="img/wrap_ftv.jpg"><div class="cap">圖 4　民視包框（12:36）：時鐘仍在、下方 bar 是 12:12 的舊標題，以「現在最焦點」判為廣告</div></div>
+<div><img src="img/ebc_promo.jpg"><div class="cap">圖 5　東森廣告中的預告卡：有標題但沒有時鐘，判為廣告</div></div>
 </div>
 <table>
 <tr><th style="width:22%">情境</th><th>處理方式</th></tr>
@@ -248,20 +290,17 @@ def build():
 </table>
 
 <h3>3.3 採用工具 Tools</h3>
-<div class="fig">{diagrams.architecture()}<div class="cap">圖 5　系統架構：本機處理影片與文字辨識，只把標題文字送到雲端 LLM</div></div>
+<div class="fig">{diagrams.architecture()}<div class="cap">圖 6　系統架構：影片、文字辨識與 AI 皆可在本機完成；選用雲端 AI 時只送出標題文字</div></div>
 <table>
 <tr><th style="width:13%">功能</th><th style="width:20%">選用工具</th><th>選用理由</th><th style="width:24%">已知限制</th></tr>
 <tr><td>畫面抽取</td><td>ffmpeg（硬體解碼）</td><td>免費、穩定，每秒一張即可滿足分鐘精度</td><td>無</td></tr>
 <tr><td>文字辨識</td><td>Apple Vision（macOS 內建）</td><td>在本機執行、免費、繁體中文辨識佳，影片不需上傳雲端</td><td>需使用 Mac；小字偶有錯字，由 LLM 容錯</td></tr>
 <tr><td>時間與廣告</td><td>Python 規則</td><td>可解釋、可重現、沒有額外成本</td><td>電視台改版時需更新區域設定（集中在 config.py）</td></tr>
-<tr><td>語意判斷</td><td>LLM（本次以 Claude 示範，正式改用 DeepSeek）</td><td>只送文字、不送影片，成本低；換後端只需改一個設定；結果快取，同一輸入重跑結果相同</td><td>新事件首次命名可能與人工習慣不同</td></tr>
+<tr><td>語意判斷</td><td>LLM：預設本機 Ollama；可在設定改用雲端 Claude 或 DeepSeek</td><td>本機執行資料不外流、無使用費，並可使用 M5 的 GPU 神經加速器；換服務只需在網頁設定切換；結果快取，同一輸入重跑結果相同</td><td>本機中小型模型品質低於雲端大模型（見 4.1），需抽查</td></tr>
+<tr><td>操作介面</td><td>本機網頁程式（Flask）</td><td>不需安裝 App，雙擊即可使用；任務排隊、中斷後接續、錯誤訊息中文化</td><td>需保持程式視窗開啟</td></tr>
 <tr><td>輸出</td><td>openpyxl、HTML</td><td>由範本複製一份再寫入，格式不會被改動</td><td>無</td></tr>
 </table>
-<div class="two fig">
-<div><img src="img/roi_tvbs.jpg"><div class="cap">圖 6　只讀固定區域：主標題、時鐘、地點標；跑馬燈不讀（TVBS 12:09）。</div></div>
-<div><img src="img/ftv_normal.jpg"><div class="cap">圖 7　民視標題區從左側推播框右邊開始讀，避免把別則推播混進標題（民視 12:03）。</div></div>
-</div>
-<p>資料格式：每秒一筆辨識紀錄（frames.jsonl）、時間與廣告分析（analysis.json）、每則新聞（stories.json，含開始時間、五字標、標題、地點、信心與理由）、事件命名表（event_registry.json）。</p>
+<p>資料格式：每秒辨識紀錄 frames.jsonl、時間與廣告 analysis.json、每則新聞 stories.json（含五字標、標題、地點、信心與理由）、事件命名表 event_registry.json。</p>
 
 <h3>3.4 施作方式 Implementation</h3>
 <table class="keep">
@@ -278,12 +317,12 @@ def build():
 <tr><td>同一格寫兩則的情況，每台至多一次，最多 2 則</td><td>同一分鐘有多則時以「/」連接，最多 2 則，保留播出最久的兩則</td></tr>
 <tr><td>「廣告」都是單獨一格</td><td>有廣告開始的分鐘只寫「廣告」；若同一分鐘就回到新聞，寫「廣告/五字標」</td></tr>
 </table>
-<p>一鍵執行：<code>python pipeline/run.py</code>，即可從影片一路產出 Excel 與驗證頁。</p>
+<p>操作方式：雙擊「開啟新聞監看.command」開啟網頁，拖入影片、確認日期時段、按「開始自動填表」，完成後下載 Excel（畫面見 4.1 圖 7–10）。</p>
 
 <h2>4. 評估結果與結論 Results &amp; Conclusion</h2>
 <h3>4.1 評估結果</h3>
-<p>以下為系統自動產出、未經人工修改的 Excel 片段（12:30–12:41）。四台各填 {cmin}–{cmax} 格，與範例的 22–27 格相近；廣告每台 3–4 次（範例 2–4 次）。程式比對範本後，四欄以外的儲存格差異為 0 處。</p>
-{excel_excerpt(1230, 1241)}
+<p>以下為系統自動產出、未經人工修改的 Excel 片段（12:30–12:38）。四台各填 {cmin}–{cmax} 格，與範例的 22–27 格相近；廣告每台 3–4 次（範例 2–4 次）。程式比對範本後，四欄以外的儲存格差異為 0 處。</p>
+{excel_excerpt(1230, 1238)}
 <table>
 <tr><th>指標（權重）</th><th style="width:11%">目標</th><th>實測結果（11/06 12:00–13:00，四台）</th><th style="width:9%">達標</th></tr>
 <tr><td>五字標可辨識率（30%）</td><td>90%</td><td>首輪抽查民視與 TVBS 共 51 格，5 格有問題，約 90%；錯誤類型已改寫成規則並重跑</td><td>達標</td></tr>
@@ -294,39 +333,49 @@ def build():
 <tr><td>處理速度（10%）</td><td>60 分鐘</td><td>約 18 分鐘（抽取與辨識四台同時進行約 12.5 分鐘，LLM 約 5 分鐘）</td><td>達標</td></tr>
 </table>
 <p>加權總分 100%。另外驗證穩定度：同一份輸入連續執行兩次，Excel 差異 0 格。</p>
-<p>實驗過程：每次抽查後把錯誤分類、改成規則再重跑。以下是本次實際發現並修正的問題：</p>
-<table>
+<p class="lead">實驗過程：每次抽查後把錯誤分類、改成規則再重跑。以下是本次實際發現並修正的問題：</p>
+<table class="keep">
 <tr><th style="width:30%">抽查發現</th><th style="width:24%">錯誤類型</th><th>修正方式與結果</th></tr>
-<tr><td>TVBS「蘇志燮廣告」</td><td>五字標含「廣告」，易與破口混淆</td><td>規則檢查後重寫為「蘇志燮爆紅」</td></tr>
-<tr><td>華視「黃仁勳涉諜」、民視「俊傑涉黑幫」</td><td>標題只寫「風波」「疑」卻寫成定論</td><td>加入保留字眼檢查，改為「黃仁勳風波」「俊傑涉黑疑雲」</td></tr>
-<tr><td>社會新聞缺地點 26 則，如民視「縱火燒警車」</td><td>命題規定社會事件要有地點</td><td>加入地點檢查，改為「汐止燒警車」等；以人名辨識的「張俊傑求刑」經審稿保留</td></tr>
-<tr><td>民視 12:33 記為「氣象」</td><td>保暖商機新聞被當成天氣</td><td>「氣象」只用於天氣預報，改為「保暖商機」；12:34 的天氣預報仍記「氣象」</td></tr>
-<tr><td>民視 12:12「大言不慚」</td><td>主播圖卡上的引言被當成一則</td><td>信心低於 0.35 且不到 60 秒的段落併入前一則</td></tr>
-<tr><td>12:59 開始的新聞消失；東森廣告中的快訊被記一格</td><td>時段與破口邊界處理</td><td>最後一則不以整點截斷；破口內的新聞不另記</td></tr>
+<tr><td>TVBS「蘇志燮廣告」；華視「黃仁勳涉諜」</td><td>含「廣告」易混淆；標題只寫「風波」卻寫成定論</td><td>規則檢查後重寫為「蘇志燮爆紅」「黃仁勳風波」</td></tr>
+<tr><td>社會新聞缺地點 26 則，如「縱火燒警車」</td><td>命題規定社會事件要有地點</td><td>加入地點檢查，改為「汐止燒警車」；以人名辨識的「張俊傑求刑」保留</td></tr>
+<tr><td>民視 12:33 記為「氣象」；12:12 主播圖卡引言成一則</td><td>非天氣新聞被當天氣；雜訊段</td><td>「氣象」只用於天氣預報；低信心且不到 60 秒的段落併入前則</td></tr>
+<tr><td>12:59 新聞消失；東森廣告中的快訊被記一格</td><td>時段與破口邊界</td><td>最後一則不以整點截斷；破口內的新聞不另記</td></tr>
 <tr><td>跨台統一把「兒虐數據風波」改成「兒虐案」</td><td>統一命名改變原意</td><td>加入改名防護，保留原名</td></tr>
 </table>
-<p>Prototype 介面：驗證頁（output/驗證頁.html）。每一格列出開始畫面截圖、播出時間、秒數、LLM 信心與判斷理由，黃底為建議抽查的格子，抽查員不需重看影片即可判斷多數格子。</p>
-<div class="fig"><img src="img/review_ui.png"><div class="cap">圖 8　驗證頁介面截圖（12:00–12:01）</div></div>
+<p><b>Prototype</b>：程式原始碼、安裝方式與使用說明公開於 <a href="https://github.com/MickXie/news-monitor-autofill">https://github.com/MickXie/news-monitor-autofill</a>（不含電視影片與企業提供的資料）。以下為實際操作畫面：</p>
+<div class="shots">
+<div><img src="../docs/screenshots/1_new_task.png"><div class="cap">圖 7　拖入影片，自動認台並帶入日期時段</div></div>
+<div><img src="../docs/screenshots/2_result.png"><div class="cap">圖 8　完成後下載 Excel、開啟驗證頁</div></div>
+<div><img src="../docs/screenshots/4_settings.png"><div class="cap">圖 9　選擇本機 AI，可查看狀態並一鍵關閉</div></div>
+</div>
+<div class="fig"><img src="img/review_ui.png" style="width:78%;margin:0 auto"><div class="cap">圖 10　驗證頁：每一格附開始畫面截圖、播出時間、信心與理由，黃底為建議抽查</div></div>
+<p class="lead"><b>AI 服務比較</b>（同一份 11/06 畫面文字，比較每格位置與 Claude 結果的一致率）：</p>
+<table class="keep">
+<tr><th>AI 服務</th><th>資料外流</th><th>費用</th><th>AI 處理時間</th><th>與 Claude 一致</th></tr>
+{ai_rows()}
+</table>
+<p>本機 Qwen 3.5 9B 會把相鄰新聞合併，且有少數主詞寫反的情形（例如把「藍委為兒虐數字提告沈伯洋」寫成「沈伯洋提告」）。因此本機模式另加「對照畫面文字」檢查：五字標與該則畫面文字對不上時，自動列入抽查。</p>
 
 <h3>4.2 結論與選擇</h3>
-<p>目前進度：完整流程已實作，並跑完 11/06 四台一小時，產出 Excel 與驗證頁。最終採用「規則處理時間與廣告、LLM 處理語意」的方案，理由是時間與廣告兩項用規則已達 100% 正確，而且可以解釋、可以重現。</p>
+<p>目前進度：完整流程已實作，並跑完 11/06 四台一小時，產出 Excel 與驗證頁。最終採用「規則處理時間與廣告、LLM 處理語意」的方案，理由是時間與廣告兩項用規則已達 100% 正確，而且可以解釋、可以重現。AI 預設在本機執行，符合企業「資料不上雲、成本要低」的要求；五字標品質由抽查與規則檢查把關。</p>
 <table>
 <tr><th style="width:28%">取捨</th><th>選擇與放棄</th></tr>
 <tr><td>規則或全部交給 AI</td><td>放棄「多模態模型直接看影片填表」的簡便，換取可驗證、可追溯</td></tr>
 <tr><td>每秒一張或更高頻率</td><td>表格只需要分鐘精度，每秒一張已足夠，放棄秒級細節以換取速度</td></tr>
+<tr><td>本機或雲端 AI</td><td>選本機：放棄雲端大模型較高的五字標品質，換取資料不外流與零使用費；品質差距由抽查補足</td></tr>
 <tr><td>語音辨識</td><td>本版未使用，標題 bar 已足以分段；列為下一階段處理難判片段的輔助</td></tr>
 </table>
 <table>
 <tr><th style="width:36%">已知限制</th><th style="width:22%">影響</th><th>下一階段做法</th></tr>
 <tr><td>分段點偶爾偏早（3/112），並發現漏記 1 則（民視 12:44 沈伯洋下廚被併入前一則）</td><td>少數格早一分鐘或漏記</td><td>加入主播語音判斷；試行期以人工對照組量測漏記率</td></tr>
-<tr><td>新事件第一次出現時，命名由 LLM 決定</td><td>可能與人工習慣寫法不同</td><td>事件命名表每週由組長檢視；正式改用 DeepSeek 並固定隨機性參數</td></tr>
+<tr><td>本機模型的五字標品質低於雲端大模型</td><td>抽查格數增加</td><td>試行期比較本機各模型；以命名表與規則檢查補強；組長可依需要切換雲端</td></tr>
 <tr><td>電視台改版或特殊節目版面</td><td>讀取區域失效</td><td>時鐘一致率低於 95% 或廣告段數異常時告警，由組長更新設定</td></tr>
 </table>
-<p>擴大到全天：單台處理 1 小時影片約需 7–12.5 分鐘，一台 Mac 即可即時處理四台。LLM 每小時四台約 12 次呼叫，輸入約 14 萬字、輸出約 3 萬字，以 DeepSeek 公開價格估算每小時約數元、全天約數十元（以實際帳單為準）。目前還缺少：直接接收側錄串流、全天各節目的版面設定、人工對照組與每週抽查制度、排程與告警。</p>
+<p>擴大到全天：處理四台一小時影片約 22 分鐘（讀字 12.5 分鐘＋本機 AI 約 10 分鐘），一台 Mac 即可即時跟上全天播出，AI 使用費為 0。目前還缺少：直接接收側錄串流、全天各節目的版面設定、人工對照組與每週抽查制度、排程與告警。</p>
 
 <h2>5. 推動 The Plan</h2>
 <h3>5.1 前 90 天</h3>
-<div class="fig">{diagrams.roadmap()}<div class="cap">圖 9　前 90 天落地路線圖（階段目標、交付物、驗收 KPI 與 Go/No-go 判斷點）</div></div>
+<div class="fig">{diagrams.roadmap()}<div class="cap">圖 11　前 90 天落地路線圖（階段目標、交付物、驗收 KPI 與 Go/No-go 判斷點）</div></div>
 <p>擴大推動或停損的條件：第 30 天時，若分鐘對齊率達 95% 且廣告破口全部正確，就擴大到全天；若五字標可辨識率低於 85% 或廣告判斷出錯，暫停擴大，只保留已證實穩定的時間與廣告自動化，五字標改由系統提供完整標題、人工改寫後再評估。</p>
 
 <h3>5.2 潛在問題分析與預防</h3>
@@ -336,7 +385,8 @@ def build():
 <tr><td>出現新的包框樣式</td><td>中</td><td>高</td><td>廣告段數比平常少時告警；新增一條特徵設定即可</td></tr>
 <tr><td>LLM 服務中斷或延遲</td><td>低</td><td>中</td><td>自動重試，可切換後端；仍失敗時以完整標題前段寫入並標低信心，不中斷流程</td></tr>
 <tr><td>五字標寫法不一致</td><td>中</td><td>中</td><td>結果快取、事件命名表、每週抽查統一</td></tr>
-<tr><td>資料外流疑慮</td><td>低</td><td>中</td><td>影片與截圖留在本機，只把標題文字送到 LLM</td></tr>
+<tr><td>資料外流疑慮</td><td>低</td><td>中</td><td>預設全部在本機處理，不送出任何資料；雲端 AI 需在設定中主動切換才會使用</td></tr>
+<tr><td>本機 AI 拖慢電腦</td><td>低</td><td>低</td><td>選用遠低於 macOS 記憶體上限的模型；閒置 5 分鐘自動釋放記憶體，設定頁可一鍵關閉</td></tr>
 </table>
 
 <h3>5.3 人與關係</h3>
@@ -345,7 +395,7 @@ def build():
 <tr><td>當班工讀生</td><td>工作是否會被取代</td><td>角色轉為抽查與錯誤回報，工時下降，判斷經驗會被寫成規則保留下來</td></tr>
 <tr><td>行政</td><td>格式是否改變、是否要重新學</td><td>Excel 與原範本完全相同，只是隔天一早就準備好</td></tr>
 <tr><td>新聞部、業務主管</td><td>準不準、出錯誰負責</td><td>每一格都能在驗證頁查證，每週提供正確率報告；監看組長為負責人</td></tr>
-<tr><td>IT、資安</td><td>成本與資料外流</td><td>文字辨識在本機執行，只送文字；LLM 全天費用約數十元</td></tr>
+<tr><td>IT、資安</td><td>成本與資料外流</td><td>文字辨識與 AI 都在本機執行，資料不離開公司電腦；沒有 AI 使用費；安裝不需管理員權限、不改系統設定</td></tr>
 </table>
 """
     page = (f"<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><title>新聞監看全自動填表提案</title>"
