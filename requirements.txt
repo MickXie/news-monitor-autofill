@@ -1,0 +1,16 @@
+blinker==1.9.0
+click==8.5.1
+Flask==3.1.3
+imageio-ffmpeg==0.8.1
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+numpy==2.5.5
+openpyxl==3.1.5
+pillow==13.0.0
+pyobjc-core==13.0
+pyobjc-framework-Cocoa==13.0
+pyobjc-framework-CoreML==13.0
+pyobjc-framework-Quartz==13.0
+pyobjc-framework-Vision==13.0
+Werkzeug==3.1.9

@@ -1,0 +1,31 @@
+# ---- 影片與電視畫面（版權內容，不公開）----
+*.mp4
+*.mov
+*.ts
+*.mkv
+*.m4v
+*.mxf
+report/img/
+report/*.pdf
+report/*.html
+output/
+
+# ---- 企業提供的資料（三立命題素材，不公開）----
+*.xlsx
+*.docx
+學生提案範本.pdf
+需求筆記.md
+
+# ---- 執行時產生的資料（含新聞內容、設定與金鑰）----
+jobs/
+work/
+data/
+
+# ---- 環境 ----
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+*.tmp
+*.part

@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新聞監看自動填表</title>
+<style>
+:root{--fg:#1d1d1f;--muted:#6e6e73;--line:#d2d2d7;--bg:#f5f5f7;--card:#fff;--blue:#0a66c2;--blue-bg:#e8f1fb;
+  --ok:#1a7f37;--ok-bg:#e9f6ec;--warn:#9a6700;--warn-bg:#fff8e1;--err:#c62828;--err-bg:#fdecea}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"PingFang TC","Heiti TC",sans-serif;background:var(--bg);color:var(--fg);font-size:16px;line-height:1.5}
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.bar{max-width:980px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:24px}
+.bar h1{font-size:19px;margin:0;white-space:nowrap}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav a{padding:7px 14px;border-radius:8px;color:var(--fg);text-decoration:none}
+nav a.on{background:var(--blue-bg);color:var(--blue);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin-bottom:16px}
+h2{font-size:18px;margin:0 0 12px}
+.step{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;align-items:center;justify-content:center;font-size:14px;margin-right:8px}
+.muted{color:var(--muted);font-size:14px}
+.drop{border:2px dashed #a1a1a6;border-radius:12px;padding:34px 16px;text-align:center;cursor:pointer;background:#fafafa}
+.drop.over{border-color:var(--blue);background:var(--blue-bg)}
+.drop b{font-size:18px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:15px}
+th{font-weight:600;color:var(--muted);font-size:13px}
+select,input[type=date],input[type=password],input[type=text]{font:inherit;padding:7px 10px;border:1px solid #b0b0b5;border-radius:8px;background:#fff}
+button,.btn{font:inherit;border:1px solid #b0b0b5;background:#fff;border-radius:8px;padding:8px 16px;cursor:pointer;text-decoration:none;color:var(--fg);display:inline-block}
+button.primary,.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+button.big,.btn.big{font-size:18px;padding:12px 28px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.link{border:none;background:none;color:var(--err);padding:4px 8px}
+.row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:13px;color:var(--muted)}
+.msg{border-radius:10px;padding:10px 14px;margin:10px 0;font-size:15px}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.msg.info{background:#f0f0f2;color:var(--muted)}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.msg.err{background:var(--err-bg);color:var(--err)}
+.prog{height:10px;background:#e5e5ea;border-radius:6px;overflow:hidden;min-width:120px}
+.prog i{display:block;height:100%;background:var(--blue);width:0;transition:width .4s}
+.tag{display:inline-block;font-size:13px;border-radius:6px;padding:2px 8px;background:#eee}
+.tag.ok{background:var(--ok-bg);color:var(--ok)} .tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.err{background:var(--err-bg);color:var(--err)} .tag.run{background:var(--blue-bg);color:var(--blue)}
+.stages{list-style:none;padding:0;margin:0}
+.stages li{padding:9px 0;display:flex;gap:12px;align-items:center;border-bottom:1px solid #f0f0f0}
+.dot{width:24px;height:24px;border-radius:50%;border:2px solid #c7c7cc;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.dot.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.dot.now{border-color:var(--blue);background:var(--blue-bg)}
+.dot.now::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--blue);animation:p 1s infinite alternate}
+@keyframes p{from{opacity:.3}to{opacity:1}}
+.big-actions{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 4px}
+.hide{display:none}
+.right{margin-left:auto}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <h1>新聞監看自動填表</h1>
+  <nav>
+    <a href="#/new" data-v="new">新任務</a>
+    <a href="#/history" data-v="history">歷史紀錄</a>
+    <a href="#/settings" data-v="settings">設定</a>
+  </nav>
+</div></header>
+<main id="app"></main>
+
+<script>
+const CH = {tvbs:"TVBS-N", ebc:"東森", ftv:"民視", cts:"華視"};
+const STAGES = [["extract","讀取影片畫面與文字"],["analyze","對時與判斷廣告"],["label","判斷新聞並寫五字標"],
+                ["unify","四台統一命名"],["fill","填入 Excel"],["review","產生驗證頁"]];
+const STATE = {draft:["尚未開始",""],queued:["排隊中","run"],running:["處理中","run"],done:["完成","ok"],
+               error:["失敗","err"],interrupted:["中斷","warn"],cancelled:["已停止","warn"]};
+const $ = s => document.querySelector(s);
+const app = $("#app");
+let timer = null;
+
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+async function api(path, opt={}){
+  const r = await fetch(path, {headers:{"Content-Type":"application/json"}, ...opt});
+  let j; try{ j = await r.json(); }catch(e){ j = {ok:false, error:"伺服器沒有回應，請確認程式視窗還開著。"}; }
+  return j;
+}
+function mins(sec){sec=Math.round(sec);const m=Math.floor(sec/60),s=sec%60;return m?`${m} 分 ${s} 秒`:`${s} 秒`}
+function slotText(h){return h==null?"":`${String(h).padStart(2,"0")}:00–${String(h).padStart(2,"0")}:59`}
+function tag(state){const [t,c]=STATE[state]||[state,""];return `<span class="tag ${c}">${t}</span>`}
+
+// ---------------- 路由 ----------------
+function route(){
+  clearInterval(timer);
+  const h = location.hash || "#/new";
+  const [, view, id] = h.split("?")[0].split("/");
+  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on", a.dataset.v===view || (view==="job"&&a.dataset.v==="history")));
+  if(view==="job") return viewJob(id);
+  if(view==="history") return viewHistory();
+  if(view==="settings") return viewSettings();
+  return viewNew();
+}
+window.addEventListener("hashchange", route);
+
+// ---------------- 新任務 ----------------
+let draft = null;           // 目前編輯中的任務
+let uploading = 0;
+
+async function viewNew(){
+  const fromUrl = (location.hash.split("?draft=")[1] || "").trim();   // 例：#/new?draft=<任務編號>
+  if(fromUrl) localStorage.setItem("nm_draft", fromUrl);
+  const saved = localStorage.getItem("nm_draft");
+  draft = null;
+  if(saved){ const j = await api(`/api/jobs/${saved}`); if(j.ok && j.job.state==="draft") draft = j.job; }
+  app.innerHTML = `
+  <div class="card">
+    <h2><span class="step">1</span>放入影片<span class="muted" style="font-weight:normal;margin-left:8px">1 到 4 台都可以，只放要處理的台</span></h2>
+    <div class="drop" id="drop"><b>把影片檔拖到這裡</b><br><span class="muted">或點這裡選擇檔案（可一次選多支）。程式會從畫面自動辨識是哪一台。</span></div>
+    <input type="file" id="pick" accept="video/*,.mp4,.mov,.ts,.mkv" multiple class="hide">
+    <div id="files"></div>
+  </div>
+  <div class="card">
+    <h2><span class="step">2</span>確認日期與時段</h2>
+    <div class="row">
+      <div class="field"><label>監看日期</label><input type="date" id="date"></div>
+      <div class="field"><label>時段（填入範本的哪一小時）</label><select id="slot"></select></div>
+      <div class="field"><label>Excel 範本</label>
+        <div class="row" style="gap:8px"><span id="tplname">預設範本（範本（乾淨版）.xlsx）</span>
+        <button id="tplbtn">換用其他範本</button><input type="file" id="tplpick" accept=".xlsx" class="hide"></div></div>
+    </div>
+    <p class="muted">日期與時段會依影片檔名和畫面時鐘自動帶入，請確認是否正確。</p>
+  </div>
+  <div class="card">
+    <h2><span class="step">3</span>開始填表</h2>
+    <div id="check"></div>
+    <button class="primary big" id="go" disabled>開始自動填表</button>
+    <span class="muted" style="margin-left:10px" id="eta"></span>
+  </div>`;
+  const slot = $("#slot");
+  slot.innerHTML = `<option value="">請選擇</option>` + [...Array(24).keys()].map(h=>`<option value="${h}">${slotText(h)}</option>`).join("");
+  const drop = $("#drop"), pick = $("#pick");
+  drop.onclick = () => pick.click();
+  pick.onchange = () => addFiles([...pick.files]);
+  ["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over")}));
+  ["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over")}));
+  drop.addEventListener("drop", ev => addFiles([...ev.dataTransfer.files]));
+  $("#date").onchange = () => saveConfig({date:$("#date").value});
+  slot.onchange = () => saveConfig({slot_hour: slot.value===""?null:+slot.value});
+  $("#tplbtn").onclick = () => $("#tplpick").click();
+  $("#tplpick").onchange = uploadTemplate;
+  $("#go").onclick = startJob;
+  renderDraft();
+}
+
+async function ensureDraft(){
+  if(draft) return draft;
+  const j = await api("/api/jobs", {method:"POST"});
+  const g = await api(`/api/jobs/${j.id}`);
+  draft = g.job; localStorage.setItem("nm_draft", draft.id);
+  return draft;
+}
+
+const pending = [];   // 上傳中的檔案 {name, size, pct, error}
+async function addFiles(list){
+  list = list.filter(f => /\.(mp4|mov|ts|mkv|m4v|mxf)$/i.test(f.name));
+  if(!list.length){ alert("請放入影片檔（mp4、mov 等）。"); return; }
+  await ensureDraft();
+  for(const f of list){ pending.push({name:f.name, size:f.size, pct:0, file:f}); }
+  renderDraft();
+  for(const p of [...pending]){ if(p.started) continue; p.started = true; await uploadOne(p); }
+}
+
+function uploadOne(p){
+  uploading++;
+  return new Promise(res=>{
+    const x = new XMLHttpRequest();
+    x.open("PUT", `/api/jobs/${draft.id}/files?name=${encodeURIComponent(p.name)}`);
+    x.upload.onprogress = e => { if(e.lengthComputable){ p.pct = e.loaded/e.total*100; renderPending(); } };
+    x.upload.onload = () => { p.pct = 100; p.probing = true; renderPending(); };
+    x.onload = () => {
+      uploading--;
+      let j; try{ j = JSON.parse(x.responseText); }catch(e){ j = {ok:false, error:"上傳失敗"}; }
+      if(j.ok){ pending.splice(pending.indexOf(p),1); draft = j.job; }
+      else { p.error = j.error; }
+      renderDraft(); res();
+    };
+    x.onerror = () => { uploading--; p.error = "上傳中斷，請確認程式還開著後重新放入。"; renderDraft(); res(); };
+    x.send(p.file);
+  });
+}
+
+function renderPending(){
+  pending.forEach((p,i)=>{
+    const el = document.getElementById("pend"+i);
+    if(el) el.innerHTML = pendingCell(p);
+  });
+}
+function pendingCell(p){
+  if(p.error) return `<span class="tag err">${esc(p.error)}</span>`;
+  if(p.probing) return `<span class="muted">辨識台別中…</span>`;
+  return `<div class="row" style="gap:8px"><div class="prog" style="flex:1"><i style="width:${p.pct.toFixed(0)}%"></i></div><span class="muted">${p.pct.toFixed(0)}%</span></div>`;
+}
+
+function renderDraft(){
+  const box = $("#files"); if(!box) return;
+  const files = draft?.files || [];
+  if(!files.length && !pending.length){ box.innerHTML=""; updateCheck(); return; }
+  const assigned = {}; Object.entries(draft?.videos||{}).forEach(([ch,path])=>assigned[path.split("/").pop()] = ch);
+  let rows = files.map(f=>{
+    const cur = assigned[f.file] || "";
+    const opts = `<option value="">不使用這支影片</option>` + Object.entries(CH).map(([k,v])=>`<option value="${k}" ${k===cur?"selected":""}>${v}</option>`).join("");
+    let how = f.ok===false ? `<span class="tag err">${esc(f.error)}</span>`
+      : f.channel_by==="畫面台標" ? `<span class="tag ok">已從畫面台標辨識</span>`
+      : f.channel_by==="檔名" ? `<span class="tag warn">依檔名推測，請確認</span>`
+      : `<span class="tag warn">不是四家競台之一或無法辨識，請選擇</span>`;
+    const time = f.clock_start ? `${f.clock_start}–${f.clock_end||"?"}` : "—";
+    return `<tr><td>${esc(f.file)}<br><span class="muted">${(f.size/1e9).toFixed(2)} GB・${Math.round(f.duration/60)} 分鐘</span></td>
+      <td><select data-file="${esc(f.file)}" class="assign">${opts}</select><br>${how}</td>
+      <td>${time}</td><td><button class="link" data-del="${esc(f.file)}">移除</button></td></tr>`;
+  }).join("");
+  rows += pending.map((p,i)=>`<tr><td>${esc(p.name)}<br><span class="muted">${(p.size/1e9).toFixed(2)} GB</span></td>
+      <td colspan="2" id="pend${i}">${pendingCell(p)}</td><td></td></tr>`).join("");
+  box.innerHTML = `<table style="margin-top:14px"><tr><th>檔案</th><th>是哪一台</th><th>畫面時間</th><th></th></tr>${rows}</table>`;
+  box.querySelectorAll(".assign").forEach(s=>s.onchange = saveAssign);
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick = async ()=>{
+    const j = await api(`/api/jobs/${draft.id}/files/${encodeURIComponent(b.dataset.del)}`, {method:"DELETE"});
+    if(j.ok){ draft = j.job; renderDraft(); }
+  });
+  if(draft){
+    if(draft.date) $("#date").value = draft.date;
+    if(draft.slot_hour!=null) $("#slot").value = draft.slot_hour;
+    if(draft.template_name) $("#tplname").textContent = draft.template_name;
+  }
+  updateCheck();
+}
+
+async function saveAssign(){
+  const assign = {};
+  document.querySelectorAll(".assign").forEach(s=>assign[s.dataset.file] = s.value);
+  await saveConfig({assign});
+}
+async function saveConfig(body){
+  await ensureDraft();
+  const j = await api(`/api/jobs/${draft.id}/config`, {method:"POST", body:JSON.stringify(body)});
+  if(j.ok){ draft = j.job; } else { alert(j.error); }
+  renderDraft();
+}
+
+async function uploadTemplate(){
+  const f = $("#tplpick").files[0]; if(!f) return;
+  await ensureDraft();
+  const r = await fetch(`/api/jobs/${draft.id}/template?name=${encodeURIComponent(f.name)}`, {method:"PUT", body:f});
+  const j = await r.json();
+  if(j.ok){ draft = j.job; renderDraft(); } else alert(j.error);
+}
+
+function updateCheck(){
+  const c = $("#check"), go = $("#go"); if(!c) return;
+  const msgs = [];
+  const vids = draft?.videos || {};
+  const have = Object.keys(vids);
+  if(uploading || pending.some(p=>!p.error)) msgs.push(["warn","影片上傳中，請稍候…"]);
+  if(!have.length && !pending.length) msgs.push(["warn","請先放入影片。"]);
+  const missing = Object.keys(CH).filter(k=>!have.includes(k)).map(k=>CH[k]);
+  if(have.length && missing.length) msgs.push(["info",`本次不處理：${missing.join("、")}（這幾台的欄位會留白）。`]);
+  if(have.length && !draft.date) msgs.push(["warn","請填監看日期。"]);
+  if(have.length && draft.slot_hour==null) msgs.push(["warn","請選時段。"]);
+  const ready = have.length && draft.date && draft.slot_hour!=null && !uploading && !pending.some(p=>!p.error);
+  if(ready) msgs.unshift(["ok",`已準備好：${Object.keys(CH).filter(k=>have.includes(k)).map(k=>CH[k]).join("、")}，${draft.date.replaceAll("-","/")} ${slotText(draft.slot_hour)}。`]);
+  c.innerHTML = msgs.map(([t,m])=>`<div class="msg ${t}">${esc(m)}</div>`).join("");
+  const n = have.length || 4;
+  $("#eta").textContent = `${n} 台一小時約需 ${n<=2?"8–12":"12–20"} 分鐘，開始後可以關閉這個頁面。`;
+  go.disabled = !ready;
+}
+
+async function startJob(){
+  $("#go").disabled = true;
+  const j = await api(`/api/jobs/${draft.id}/start`, {method:"POST"});
+  if(!j.ok){ alert(j.error); $("#go").disabled = false; return; }
+  localStorage.removeItem("nm_draft");
+  location.hash = `#/job/${draft.id}`;
+}
+
+// ---------------- 任務進度與結果 ----------------
+async function viewJob(id){
+  app.innerHTML = `<div class="card"><p class="muted">載入中…</p></div>`;
+  const draw = async () => {
+    const j = await api(`/api/jobs/${id}`);
+    if(!j.ok){ app.innerHTML = `<div class="card"><div class="msg err">找不到這個任務。</div></div>`; clearInterval(timer); return; }
+    renderJob(j.job);
+    if(!["queued","running"].includes(j.job.state)) clearInterval(timer);
+  };
+  await draw();
+  timer = setInterval(draw, 2000);
+}
+
+function renderJob(job){
+  const st = job.status || {};
+  const chs = Object.keys(CH).filter(c=>c in (job.videos||{}));
+  const title = `${(job.date||"").replaceAll("-","/")} ${slotText(job.slot_hour)}`;
+  let body = "";
+  if(job.state==="queued"){
+    body = `<div class="msg warn">排隊中：前面有任務正在處理，完成後會自動開始。</div>`;
+  }
+  if(["running","queued","error","interrupted","cancelled"].includes(job.state) && job.state!=="queued"){
+    const done = st.stages_done || [];
+    body += `<ul class="stages">` + STAGES.map(([k,t])=>{
+      const cls = done.includes(k) ? "done" : (st.stage===k && job.state==="running" ? "now" : "");
+      let extra = "";
+      if(k==="extract" && (st.stage==="extract" || !done.includes("extract"))){
+        extra = `<div style="flex:1">` + chs.map(ch=>{
+          const p = job.progress[ch] || {done:0,total:1};
+          const pct = Math.min(100, p.done/Math.max(p.total,1)*100);
+          const rate = p.elapsed/Math.max(p.done-(p.start||0),1);
+          const eta = job.state==="running" && p.done-(p.start||0)>20 && p.status!=="done" ? `約剩 ${mins((p.total-p.done)*rate)}` : (p.status==="done"?"完成":"");
+          return `<div class="row" style="gap:10px;margin:3px 0"><span style="width:70px;white-space:nowrap">${CH[ch]}</span>
+            <div class="prog" style="flex:1"><i style="width:${pct.toFixed(1)}%"></i></div>
+            <span class="muted" style="width:150px">${pct.toFixed(0)}% ${eta}</span></div>`;
+        }).join("") + `</div>`;
+      }
+      return `<li><span class="dot ${cls}">${cls==="done"?"✓":""}</span><span style="width:170px">${t}</span>${extra}</li>`;
+    }).join("") + `</ul>`;
+  }
+  if(job.state==="running"){
+    const t0 = st.started || job.started;
+    const el = t0 ? mins(Date.now()/1000 - t0) : "剛開始";
+    body += `<p class="muted">已進行 ${el}。可以關閉這個頁面，程式會在背景繼續處理；處理期間請不要關閉程式視窗或讓電腦關機。</p>
+      <button id="cancel">停止處理</button>`;
+  }
+  if(job.state==="error"){
+    body = `<div class="msg err"><b>處理失敗：</b>${esc(st.error||"未知錯誤")}</div>` + body +
+      `<div class="big-actions"><button class="primary" id="resume">重新執行（從中斷處接續）</button></div>`;
+  }
+  if(job.state==="interrupted" || job.state==="cancelled"){
+    body = `<div class="msg warn">${job.state==="interrupted"?"程式上次被關閉，這個任務中斷了。":"這個任務已停止。"}已完成的部分會保留，按下方按鈕會從中斷處接續。</div>` + body +
+      `<div class="big-actions"><button class="primary" id="resume">繼續執行</button></div>`;
+  }
+  if(job.state==="done" && st.result){
+    const r = st.result;
+    const rows = Object.keys(CH).filter(k=>k in r.channels).map(k=>[k,r.channels[k]]).map(([ch,c])=>`<tr><td>${esc(c.name)}</td><td>${c.cells} 格</td><td>${c.ads} 段</td>
+       <td>${c.low? `<span class="tag warn">${c.low} 則</span>` : `<span class="tag ok">0 則</span>`}</td></tr>`).join("");
+    body = `<div class="msg ok">已完成，共花 ${mins(r.seconds)}。</div>
+      <div class="big-actions">
+        <a class="btn primary big" href="/jobs/${job.id}/${encodeURI(r.excel)}">下載 Excel</a>
+        <a class="btn big" href="/jobs/${job.id}/${encodeURI(r.review)}" target="_blank">開啟驗證頁</a>
+      </div>
+      <table style="margin-top:12px"><tr><th>台</th><th>填寫格數</th><th>廣告段數</th><th>建議抽查</th></tr>${rows}</table>
+      <p class="muted">「建議抽查」是系統信心較低的新聞，在驗證頁以黃底標示，點縮圖可放大對照畫面。</p>`;
+  }
+  const warns = (st.warnings||[]).map(w=>`<div class="msg warn">⚠ ${esc(w)}</div>`).join("");
+  app.innerHTML = `<div class="card"><div class="row"><h2 style="margin:0">${esc(title)}</h2>${tag(job.state)}
+    <span class="muted right">${chs.map(c=>CH[c]).join("、")}</span></div>
+    <div style="margin-top:14px">${body}</div>${warns}</div>
+    <a href="#/new" class="btn">建立新任務</a>`;
+  const c = $("#cancel"); if(c) c.onclick = async ()=>{ if(confirm("確定要停止？已完成的部分會保留，之後可以接續。")){ await api(`/api/jobs/${job.id}/cancel`,{method:"POST"}); viewJob(job.id);} };
+  const r = $("#resume"); if(r) r.onclick = async ()=>{ const j = await api(`/api/jobs/${job.id}/resume`,{method:"POST"}); if(!j.ok) alert(j.error); viewJob(job.id); };
+}
+
+// ---------------- 歷史紀錄 ----------------
+async function viewHistory(){
+  const j = await api("/api/jobs");
+  const rows = (j.jobs||[]).map(x=>{
+    const t = new Date(x.created*1000);
+    const chs = Object.keys(CH).filter(c=>c in (x.videos||{})).map(c=>CH[c]).join("、");
+    const dl = x.state==="done" && x.result ? `<a href="/jobs/${x.id}/${encodeURI(x.result.excel)}">下載 Excel</a>` : "";
+    return `<tr><td>${esc((x.date||"").replaceAll("-","/"))} ${slotText(x.slot_hour)}</td><td>${esc(chs)}</td><td>${tag(x.state)}</td>
+      <td class="muted">${t.toLocaleString("zh-TW",{hour12:false})}</td>
+      <td>${dl}</td><td><a href="#/job/${x.id}">查看</a></td><td><button class="link" data-del="${x.id}">刪除</button></td></tr>`;
+  }).join("");
+  app.innerHTML = `<div class="card"><h2>歷史紀錄</h2>
+    ${rows? `<table><tr><th>日期與時段</th><th>台</th><th>狀態</th><th>建立時間</th><th></th><th></th><th></th></tr>${rows}</table>`
+          : `<p class="muted">還沒有任何任務。</p>`}</div>`;
+  app.querySelectorAll("[data-del]").forEach(b=>b.onclick = async ()=>{
+    if(!confirm("確定刪除這個任務？產出的 Excel 與驗證頁也會一起刪除，無法復原。")) return;
+    const r = await api(`/api/jobs/${b.dataset.del}`, {method:"DELETE"});
+    if(!r.ok) alert(r.error); viewHistory();
+  });
+}
+
+// ---------------- 設定 ----------------
+async function viewSettings(){
+  const j = await api("/api/settings"); const s = j.settings;
+  const models = s.local_models || [];
+  const modelOpts = models.length ? models.map(m=>`<option ${m===s.local_model?"selected":""}>${esc(m)}</option>`).join("")
+                                  : `<option>${esc(s.local_model)}</option>`;
+  app.innerHTML = `<div class="card"><h2>寫五字標使用的 AI 服務</h2>
+    <label class="row" style="gap:8px;margin:6px 0"><input type="radio" name="be" value="local" ${s.backend==="local"?"checked":""} ${s.local_available?"":"disabled"}>
+      <b>本機 AI（建議）</b>：資料完全不離開這台電腦，沒有使用費</label>
+    <div style="margin:4px 0 14px 26px" class="row">
+      ${s.local_available ? `<span class="muted">使用模型</span><select id="lm">${modelOpts}</select>` : `<span class="muted">這台電腦還沒安裝本機 AI（Ollama），請見使用說明。</span>`}
+    </div>
+    <div style="margin:0 0 14px 26px" id="localbox"></div>
+    <p class="muted" style="margin:10px 0 4px">以下為雲端服務（會把標題文字送到外部）：</p>
+    <label class="row" style="gap:8px;margin:6px 0"><input type="radio" name="be" value="deepseek" ${s.backend==="deepseek"?"checked":""}> DeepSeek（需要 API 金鑰）</label>
+    <div style="margin:4px 0 12px 26px" class="row">
+      <input type="password" id="key" placeholder="${s.has_key? "已設定（"+esc(s.key_hint)+"），要更換請貼上新金鑰" : "貼上 DeepSeek API 金鑰"}" style="width:420px">
+    </div>
+    <label class="row" style="gap:8px;margin:6px 0"><input type="radio" name="be" value="claude" ${s.backend==="claude"?"checked":""} ${s.claude_available?"":"disabled"}>
+      Claude（使用這台電腦已登入的 Claude Code）${s.claude_available?"":"<span class='muted'>　這台電腦沒有安裝</span>"}</label>
+    <div class="big-actions"><button class="primary" id="save">儲存</button><button id="test">測試連線</button></div>
+    <div id="res"></div></div>
+    <div class="card"><h2>檔案管理</h2>
+    <label class="row" style="gap:8px"><input type="checkbox" id="del" ${s.delete_videos?"checked":""}> 處理完成後刪除上傳的影片副本（原檔仍在你的電腦，不受影響；可節省約 6 GB／次）</label>
+    <div class="big-actions"><button id="save2">儲存</button></div></div>`;
+  const drawLocal = async () => {
+    const box = $("#localbox"); if(!box || !s.local_available) return;
+    const r = await api("/api/local"); const st = r.status || {};
+    box.innerHTML = `<div class="row" style="gap:10px">
+      <span>狀態：${st.running ? `<span class="tag ok">執行中</span>` : `<span class="tag">未執行</span>`}</span>
+      ${st.running ? `<span class="muted">${st.loaded.length ? "已載入 "+esc(st.loaded.join("、"))+"，佔用約 "+st.mem_gb+" GB" : "模型未載入（不佔記憶體）"}</span>` : ""}
+      ${st.running ? `<button id="lstop">關閉本機 AI</button>` : `<button id="lstart">開啟本機 AI</button>`}
+    </div><p class="muted" style="margin:6px 0 0">平常不用管它：開始填表時會自動開啟，處理完 5 分鐘沒工作會自動釋放記憶體，關閉程式時也會一起關閉。</p>`;
+    const b1 = $("#lstop"), b2 = $("#lstart");
+    if(b1) b1.onclick = async ()=>{ b1.disabled=true; const x = await api("/api/local/stop",{method:"POST"}); if(!x.ok) alert(x.error); drawLocal(); };
+    if(b2) b2.onclick = async ()=>{ b2.disabled=true; const x = await api("/api/local/start",{method:"POST"}); if(!x.ok) alert(x.error); drawLocal(); };
+  };
+  drawLocal();
+  const save = async () => {
+    const body = {backend: document.querySelector("input[name=be]:checked")?.value || "local", delete_videos: $("#del").checked};
+    if($("#lm")) body.local_model = $("#lm").value;
+    if($("#key").value.trim()) body.deepseek_key = $("#key").value.trim();
+    const r = await api("/api/settings", {method:"POST", body:JSON.stringify(body)});
+    $("#res").innerHTML = r.ok ? `<div class="msg ok">已儲存。</div>` : `<div class="msg err">${esc(r.error)}</div>`;
+    $("#key").value = "";
+  };
+  $("#save").onclick = save; $("#save2").onclick = save;
+  $("#test").onclick = async () => {
+    await save();
+    $("#res").innerHTML = `<div class="msg warn">測試中，約需 5–30 秒…</div>`;
+    const r = await api("/api/settings/test", {method:"POST"});
+    $("#res").innerHTML = `<div class="msg ${r.ok?"ok":"err"}">${esc(r.ok? r.message : r.error)}</div>`;
+  };
+}
+
+route();
+</script>
+</body>
+</html>
